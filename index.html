@@ -132,13 +132,18 @@ h1,h2,h3,.display{font-family:"Lilita One",Nunito,sans-serif;font-weight:400;let
 .btn.red{background:var(--red);color:#fff}
 .btn.sm{height:52px;font-size:19px;padding:0 18px;border-radius:16px}
 .mistakes{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
-.mistake{padding:10px 14px;border-radius:14px;background:rgba(255,90,95,.18);border:1px solid rgba(255,90,95,.45);font-size:18px}
-.mistake s{opacity:.6;margin-left:6px}
+.mistake{display:flex;flex-direction:column;gap:6px;padding:12px 18px;border-radius:16px;background:rgba(255,90,95,.16);border:2px solid rgba(255,90,95,.6);min-width:150px}
+.mistake .mq{font-family:"Lilita One";font-size:26px;letter-spacing:.5px}
+.mistake .mq b{color:#5dffa0;font-weight:400}
+.mistake .mw{font-size:17px;color:#ffd0d2;display:flex;align-items:center;gap:8px}
+.mistake .mw s{font-family:"Lilita One";font-size:28px;color:#fff;background:#ff4d55;padding:0 10px;border-radius:10px;text-decoration-thickness:4px;text-decoration-color:#fff}
 
 /* progress */
-.heat{display:grid;grid-template-columns:44px repeat(12,1fr);gap:5px}
+.heat{display:grid;grid-template-columns:34px repeat(12,minmax(0,1fr));gap:4px}
+.two>*{min-width:0}
+.heat div{min-width:0;overflow:hidden}
 .heat div{aspect-ratio:1;border-radius:9px;display:grid;place-items:center;font-size:13px}
-.heat .hd{font-family:"Lilita One";font-size:18px;color:var(--mute);background:none}
+.heat .hd{font-family:"Lilita One";font-size:16px;color:var(--mute);background:none}
 .c0{background:rgba(255,255,255,.07);color:var(--mute)}
 .c1{background:#ff5a5f}.c2{background:#ff9f1c;color:#3a1d00}.c3{background:#ffd23f;color:#3a2a00}.c4{background:#3ddc84;color:#06331b}
 .heat .cell{cursor:pointer}
@@ -281,16 +286,17 @@ input.txt{height:52px;border-radius:14px;border:1px solid var(--line);background
 
   <div class="section-title">Pick your tables</div>
   <div class="tables" id="tables"></div>
+  <div class="muted small" style="margin:10px 2px 0">⭐ Harder tables earn more points. Easy ones like ×1 and ×2 earn the least, and sums you have mastered earn half.</div>
 
   <div class="section-title">How do you want to answer?</div>
   <div class="seg" id="styleSeg">
-    <button data-style="mc">🅰️ Multiple choice<small>5 pts each</small></button>
-    <button data-style="type">⌨️ Type the answer<small>10 pts each</small></button>
+    <button data-style="mc">🅰️ Multiple choice<small>Half points</small></button>
+    <button data-style="type">⌨️ Type the answer<small>Full points</small></button>
   </div>
 
   <div class="section-title">Choose a challenge</div>
   <div class="modes">
-    <button class="mode m1" data-mode="practice"><span class="tag">10 questions</span><h3>Practice</h3><p>No clock. Take your time and get them right.</p><span class="em">🎯</span></button>
+    <button class="mode m1" data-mode="practice"><span class="tag">½ points</span><h3>Practice</h3><p>No clock. Take your time and get them right.</p><span class="em">🎯</span></button>
     <button class="mode m2" data-mode="speed"><span class="tag">×1.5 points</span><h3>Speed Run</h3><p id="speedDesc">15 questions, beat the clock on each one.</p><span class="em">⏱️</span></button>
     <button class="mode m3" data-mode="blitz"><span class="tag">×1.5 points</span><h3>Blitz</h3><p id="blitzDesc">As many as you can in 60 seconds.</p><span class="em">⚡</span></button>
     <button class="mode m4" data-mode="tricky"><span class="tag">×1.5 points</span><h3>Tricky Ones</h3><p>Your hardest facts. Beat them for bonus points.</p><span class="em">🧠</span></button>
@@ -897,8 +903,21 @@ function distractors(a, b){
 
 /* ---------- quiz engine ---------- */
 let Q = null, rafId = 0;
+// How hard a sum is: the EASIER of the two numbers decides it (2x7 is easy, 7x8 is hard)
+const DIFF = { 1:0.15, 2:0.4, 10:0.4, 5:0.6, 11:0.6, 3:0.8, 4:0.8, 9:1.0, 6:1.1, 12:1.15, 7:1.3, 8:1.3 };
+function factValue(a, b){
+  let v = Math.min(DIFF[a] || 1, DIFF[b] || 1);
+  if ((a === 11 && b > 9) || (b === 11 && a > 9)) v = Math.max(v, 1.0);
+  return v;
+}
+function masteryMult(st){
+  if (!st.a) return 1;
+  if (level(st) === 4) return 0.5;
+  if (st.a >= 2 && st.acc < 0.6) return 1.5;
+  return 1;
+}
 const MODES = {
-  practice: { n: 10, timed: false, mult: 1 },
+  practice: { n: 10, timed: false, mult: 0.5 },
   speed:    { n: 15, timed: true,  mult: 1.5 },
   blitz:    { n: Infinity, timed: true, mult: 1.5 },
   tricky:   { n: 10, timed: false, mult: 1.5 }
@@ -992,16 +1011,19 @@ function answer(given, btn){
   Q.locked = true;
   cancelAnimationFrame(rafId);
   const { a, b, shownAt } = Q.cur, right = a * b, ms = now() - shownAt, ok = given === right;
+  const before = factStats(a, b), fv = factValue(a, b), mm = masteryMult(before);
   record(a, b, given, ok, ms, Q.m.timed, Q.style);
   Q.i++;
   const box = $("#qBox");
   if (ok){
     Q.correct++; Q.streak++; Q.best = Math.max(Q.best, Q.streak); Q.times.push(ms);
     S.bestStreak = Math.max(S.bestStreak, Q.streak);
-    let p = Math.round((Q.style === "mc" ? 5 : 10) * Q.m.mult);
-    if (ms < 3000) p += 2;
-    let msg = ms < 3000 ? "⚡ Lightning fast!" : ["✅ Correct!", "🎉 Nailed it!", "💪 Yes!", "🔥 Great!"][Math.floor(Math.random() * 4)];
-    if (Q.streak % 5 === 0){ p += 10; msg = "🔥 " + Q.streak + " in a row! +10 bonus"; sfx.streak(); } else sfx.good();
+    let p = Math.max(1, Math.round((Q.style === "mc" ? 5 : 10) * Q.m.mult * fv * mm));
+    if (ms < 3000 && fv >= 0.8) p += 2;
+    let msg = ms < 3000 && fv >= 0.8 ? "⚡ Lightning fast!" : ["✅ Correct!", "🎉 Nailed it!", "💪 Yes!", "🔥 Great!"][Math.floor(Math.random() * 4)];
+    if (mm > 1) msg = "🌟 Tricky one beaten! Bonus points";
+    else if (fv < 0.5) msg += " Easy one, harder tables earn more";
+    if (Q.streak % 5 === 0){ const sb = Math.max(2, Math.round(10 * fv * Math.min(1, Q.m.mult))); p += sb; msg = "🔥 " + Q.streak + " in a row! +" + sb + " bonus"; sfx.streak(); } else sfx.good();
     Q.pts += p; S.points += p; S.lifetime += p;
     S.daily[dayKey()].p += p;
     box.classList.add("good");
@@ -1077,7 +1099,7 @@ function endQuiz(){
   } else rkEl.style.display = "none";
   const seen = new Set(), ms = q.mistakes.filter(m => { const k = m.a+"x"+m.b; if (seen.has(k)) return false; seen.add(k); return true; });
   $("#rMistakesWrap").style.display = ms.length ? "" : "none";
-  $("#rMistakes").innerHTML = ms.map(m => '<div class="mistake">'+m.a+' × '+m.b+' = <b>'+(m.a*m.b)+'</b>'+(m.given != null ? '<s>'+m.given+'</s>' : ' ⏰')+'</div>').join("");
+  $("#rMistakes").innerHTML = ms.map(m => '<div class="mistake"><div class="mq">✅ '+m.a+' × '+m.b+' = <b>'+(m.a*m.b)+'</b></div><div class="mw">'+(m.given != null ? '❌ You said <s>'+m.given+'</s>' : '⏰ Ran out of time')+'</div></div>').join("");
   $("#againBtn").onclick = () => startQuiz(q.mode);
   show("results");
   if (acc >= .9 && n >= 5){ confetti(120); sfx.win(); }
