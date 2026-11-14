@@ -249,6 +249,7 @@ input.txt{height:52px;border-radius:14px;border:1px solid var(--line);background
       <div class="sync" id="sync">Loading progress…</div>
     </div>
     <div class="spacer"></div>
+    <button class="iconbtn" id="avEditBtn" aria-label="Change avatar">🎨</button>
     <button class="iconbtn" id="muteBtn" aria-label="Sound">🔊</button>
     <button class="iconbtn" data-go="board" aria-label="Leaderboard">🏆</button>
     <button class="iconbtn" data-go="progress" aria-label="My progress">📊</button>
@@ -1425,6 +1426,7 @@ document.addEventListener("click", e => {
   if (adj && PP){ const p = PL[PP], v = Number(adj.dataset.adj); p.points = Math.max(0, p.points + v); if (v > 0) p.lifetime += v; if (p.points < p.settings.goal) p._celebrated = false; sfx.tap(); savePlayer(p); renderParent(); }
 });
 $("#muteBtn").onclick = () => { muted = !muted; lsSet(LS_MUTE, muted ? "1" : "0"); renderHome(); sfx.tap(); };
+$("#avEditBtn").onclick = () => { sfx.tap(); playerDialog("Pick your avatar", "Done", null, S.avatar, (_, av) => { S.avatar = av; F.roster[S.id].avatar = av; F.roster[S.id].u = now(); save(true); saveFamily(); renderHome(); sfx.good(); }); };
 $("#switchBtn").onclick = () => { sfx.tap(); S = null; lsSet(LS_CUR, null); show("login"); };
 $("#quitBtn").onclick = () => message("🚪", "Leave this game?", "Points you've already earned are kept.", [["Keep playing", "ghost", () => {}], ["Leave", "red", quitQuiz]]);
 $("#lockBtn").onclick = () => { parentReturn = "home"; parentGate(() => show("parent")); };
