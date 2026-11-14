@@ -218,6 +218,8 @@ input.txt{height:52px;border-radius:14px;border:1px solid var(--line);background
 .brow.me{background:rgba(255,210,63,.12);border-radius:16px;border-bottom-color:transparent}
 .pchip{display:inline-flex;align-items:center;gap:8px;height:52px;padding:0 16px;border-radius:16px;background:var(--card);border:2px solid var(--line);font-size:18px}
 .pchip.on{border-color:var(--yellow);background:rgba(255,210,63,.18)}
+.topicons{display:flex;gap:12px}
+@media (max-width:700px){#home .top{flex-wrap:wrap}#home .top .spacer{display:none}#home .topicons{width:100%;justify-content:space-between;margin-top:6px}}
 @media (max-width:560px){.tabs4{grid-template-columns:repeat(2,1fr)}.avgrid{grid-template-columns:repeat(4,1fr)}}
 </style>
 </head>
@@ -249,11 +251,13 @@ input.txt{height:52px;border-radius:14px;border:1px solid var(--line);background
       <div class="sync" id="sync">Loading progress…</div>
     </div>
     <div class="spacer"></div>
-    <button class="iconbtn" id="avEditBtn" aria-label="Change avatar">🎨</button>
-    <button class="iconbtn" id="muteBtn" aria-label="Sound">🔊</button>
-    <button class="iconbtn" data-go="board" aria-label="Leaderboard">🏆</button>
-    <button class="iconbtn" data-go="progress" aria-label="My progress">📊</button>
-    <button class="iconbtn" id="lockBtn" aria-label="Parent zone">🔒</button>
+    <div class="topicons">
+      <button class="iconbtn" id="avEditBtn" aria-label="Change avatar">🎨</button>
+      <button class="iconbtn" id="muteBtn" aria-label="Sound">🔊</button>
+      <button class="iconbtn" data-go="board" aria-label="Leaderboard">🏆</button>
+      <button class="iconbtn" data-go="progress" aria-label="My progress">📊</button>
+      <button class="iconbtn" id="lockBtn" aria-label="Parent zone">🔒</button>
+    </div>
   </div>
 
   <div class="card goal" id="goalCard">
