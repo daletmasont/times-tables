@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Times Tables">
-<meta name="app-version" content="2026.11.15c">
+<meta name="app-version" content="2026.11.15e">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-512.png">
 <title>Times Tables Quest</title>
@@ -70,7 +70,7 @@ h1,h2,h3,.display{font-family:"Lilita One",Nunito,sans-serif;font-weight:400;let
 .tbl.on{background:linear-gradient(160deg,var(--cyan),#1a8bff);border-color:#9ff3ff;color:#06203d;box-shadow:0 4px 0 #0b5aa8}
 .tbl.all{font-size:16px}
 .seg{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:rgba(0,0,0,.25);padding:6px;border-radius:20px;border:1px solid var(--line)}
-.seg button{height:64px;border-radius:15px;font-size:19px;color:var(--mute)}
+.seg button{min-height:64px;padding:8px 6px;border-radius:15px;font-size:19px;color:var(--mute);line-height:1.2}
 .seg button small{display:block;font-size:13px;opacity:.8}
 .seg button.on{background:#fff;color:#2d1580;box-shadow:0 4px 0 rgba(0,0,0,.25)}
 
@@ -104,6 +104,8 @@ h1,h2,h3,.display{font-family:"Lilita One",Nunito,sans-serif;font-weight:400;let
 .fb{margin-top:16px;font-size:24px;min-height:32px;padding:0 12px}
 .tip{margin:12px auto 0;max-width:520px;padding:10px 16px;border-radius:16px;background:rgba(255,210,63,.16);border:1px solid rgba(255,210,63,.5);color:#ffe9a3;font-size:18px;line-height:1.35;display:none}
 .tip.on{display:block}
+.tip .how{font-size:17px;color:#ffe9a3}
+.tip .ex{font-family:"Lilita One";font-size:30px;color:#fff;letter-spacing:.5px;margin-top:2px}
 .fixtag{display:none;margin:0 auto 10px;padding:6px 14px;border-radius:999px;background:rgba(45,225,252,.2);border:1px solid rgba(45,225,252,.6);color:#bff6ff;font-size:16px}
 .fixtag.on{display:inline-block}
 .mistake .mt{font-size:14px;color:#ffe9a3;max-width:260px;line-height:1.3}
@@ -304,7 +306,7 @@ input.txt{height:52px;border-radius:14px;border:1px solid var(--line);background
   <div class="section-title">How do you want to answer?</div>
   <div class="seg" id="styleSeg">
     <button data-style="mc">🅰️ Multiple choice<small>Half points</small></button>
-    <button data-style="type">⌨️ Type the answer<small>Full points</small></button>
+    <button data-style="type">⌨️ Type it<small>Full points</small></button>
   </div>
 
   <div class="section-title">Choose a challenge</div>
@@ -949,42 +951,44 @@ function rewardLabel(p){ const t = String((p.settings && p.settings.rewardText) 
 function rewardIcon(p){ return /v-?bucks/i.test(rewardLabel(p)) ? '<span class="coin">V</span>' : "🎁"; }
 const APP_VERSION = (document.querySelector("meta[name=app-version]") || {}).content || "dev";
 let Q = null, rafId = 0;
-/* ---------- tips ---------- */
-function tipFor(a, b){
+/* ---------- tips: a short rule + one worked example ---------- */
+function tipParts(a, b){
   const ans = a * b;
-  if ((a === 7 && b === 8) || (a === 8 && b === 7)) return "5, 6, 7, 8 → 56 = 7 × 8. The numbers go in order!";
-  if (a === b && a === 7) return "Seven sevens are forty-nine. Say it like a rhyme!";
-  if (a === b && a === 12) return "12 × 12 = 144 (it's called a gross).";
+  if ((a === 7 && b === 8) || (a === 8 && b === 7)) return { how: "Count 5, 6, 7, 8", ex: "56 = 7 × 8" };
+  if (a === 7 && b === 7) return { how: "Remember the rhyme", ex: "Seven sevens are " + ans };
+  if (a === 12 && b === 12) return { how: "Do 12 × 10, then add 12 × 2", ex: "120 + 24 = 144" };
   const order = [1, 10, 2, 5, 11, 9, 4, 3, 6, 8, 12, 7];
-  let t = order.find(x => (x === a || x === b) && !(x === 11 && Math.max(a === 11 ? b : a, 0) > 9));
-  if (t === undefined) t = (a === 11 || b === 11) ? 11 : Math.min(a, b);
+  let t = order.find(x => (x === a || x === b) && !(x === 11 && (a === 11 ? b : a) > 9));
+  if (t === undefined) t = 11;
   const n = t === a ? b : a;
   switch (t){
-    case 1: return "Anything × 1 stays the same: " + n + " × 1 = " + n + ".";
-    case 10: return "× 10: put a 0 on the end. " + n + " → " + n + "0.";
-    case 2: return "× 2 means double it: " + n + " + " + n + " = " + ans + ".";
-    case 5: return "× 5 is half of × 10: " + n + " × 10 = " + (n * 10) + ", half is " + ans + ".";
-    case 11: return n <= 9 ? "× 11 with a single digit: write it twice! " + n + n + "." : "× 11: do × 10 and add one more lot. " + (n * 10) + " + " + n + " = " + ans + ".";
-    case 9: return "× 9: do × 10 then take one lot away. " + (n * 10) + " − " + n + " = " + ans + ".";
-    case 4: return "× 4: double, then double again. " + n + " → " + (n * 2) + " → " + ans + ".";
-    case 3: return "× 3: double it, then add one more lot. " + (n * 2) + " + " + n + " = " + ans + ".";
-    case 6: return "× 6: do × 5, then add one more lot. " + (n * 5) + " + " + n + " = " + ans + ".";
-    case 8: return "× 8: double, double, double! " + n + " → " + (n * 2) + " → " + (n * 4) + " → " + ans + ".";
-    case 12: return "× 12: do × 10, then add × 2. " + (n * 10) + " + " + (n * 2) + " = " + ans + ".";
-    case 7: return "× 7: do × 5 and add × 2. " + (n * 5) + " + " + (n * 2) + " = " + ans + ".";
+    case 1:  return { how: "Anything × 1 stays the same", ex: n + " × 1 = " + ans };
+    case 10: return { how: "Put a 0 after " + n, ex: n + " → " + ans };
+    case 2:  return { how: "Double " + n, ex: n + " + " + n + " = " + ans };
+    case 5:  return { how: "Do " + n + " × 10, then halve it", ex: (n * 10) + " → " + ans };
+    case 11: return n <= 9 ? { how: "Write " + n + " twice", ex: n + " → " + ans } : { how: "Do " + n + " × 10, then add " + n, ex: (n * 10) + " + " + n + " = " + ans };
+    case 9:  return { how: "Do " + n + " × 10, then take away " + n, ex: (n * 10) + " − " + n + " = " + ans };
+    case 4:  return { how: "Double " + n + ", then double again", ex: n + " → " + (n * 2) + " → " + ans };
+    case 3:  return { how: "Double " + n + ", then add " + n, ex: (n * 2) + " + " + n + " = " + ans };
+    case 6:  return { how: "Do " + n + " × 5, then add " + n, ex: (n * 5) + " + " + n + " = " + ans };
+    case 8:  return { how: "Double " + n + " three times", ex: n + " → " + (n * 2) + " → " + (n * 4) + " → " + ans };
+    case 12: return { how: "Do " + n + " × 10, then add " + n + " × 2", ex: (n * 10) + " + " + (n * 2) + " = " + ans };
+    case 7:  return { how: "Do " + n + " × 5, then add " + n + " × 2", ex: (n * 5) + " + " + (n * 2) + " = " + ans };
   }
-  return "";
+  return { how: "", ex: "" };
 }
-function hintFor(a, b){ // the method without the answer, for the fix-up round
-  const ans = a * b;
-  if ((a === 7 && b === 8) || (a === 8 && b === 7)) return "Think 5, 6, 7, 8. The numbers go in order!";
-  if (a === 7 && b === 7) return "Remember the rhyme: seven sevens are forty-…?";
-  if (a === 12 && b === 12) return "It's called a gross. Do 12 × 10, then add 12 × 2.";
-  if ((a === 11 && b <= 9) || (b === 11 && a <= 9)) return "× 11 with a single digit: write the digit twice!";
-  const t = tipFor(a, b), i = t.lastIndexOf(String(ans));
-  return i >= 0 ? (t.slice(0, i) + "?" + t.slice(i + String(ans).length)).replace("?.", "?") : t;
+function tipFor(a, b){ const t = tipParts(a, b); return t.how + ": " + t.ex; }
+function hintParts(a, b){ // same tip with the answer hidden, for the fix-up round
+  const t = tipParts(a, b), s = String(a * b);
+  if ((a === 7 && b === 8) || (a === 8 && b === 7)) return { how: t.how, ex: "?? = 7 × 8" };
+  const i = t.ex.lastIndexOf(s);
+  return { how: t.how, ex: i >= 0 ? t.ex.slice(0, i) + "?" + t.ex.slice(i + s.length) : t.ex };
 }
-function showTip(a, b, hide){ const el = $("#tip"); el.textContent = "💡 " + (hide ? hintFor(a, b) : tipFor(a, b)); el.classList.add("on"); }
+function showTip(a, b, hide){
+  const t = hide ? hintParts(a, b) : tipParts(a, b), el = $("#tip");
+  el.innerHTML = '<div class="how">💡 ' + esc(t.how) + '</div><div class="ex">' + esc(t.ex) + '</div>';
+  el.classList.add("on");
+}
 function hideTip(){ $("#tip").classList.remove("on"); }
 // How hard a sum is: the EASIER of the two numbers decides it (2x7 is easy, 7x8 is hard)
 const DIFF = { 1:0.15, 2:0.4, 10:0.4, 5:0.6, 11:0.6, 3:0.8, 4:0.8, 9:1.0, 6:1.1, 12:1.15, 7:1.3, 8:1.3 };
@@ -1187,7 +1191,7 @@ function endQuiz(){
   const seen = new Set(), ms = q.mistakes.filter(m => { const k = m.a+"x"+m.b; if (seen.has(k)) return false; seen.add(k); return true; });
   $("#rMistakesWrap").style.display = ms.length ? "" : "none";
   $("#rMistakes").innerHTML = ms.map(m => '<div class="mistake"><div class="mq">✅ '+m.a+' × '+m.b+' = <b>'+(m.a*m.b)+'</b></div><div class="mw">'+(m.given != null ? '❌ You said <s>'+m.given+'</s>' : '⏰ Ran out of time')+'</div></div>').join("");
-  $("#rMistakes").innerHTML = ms.map(m => '<div class="mistake"><div class="mq">✅ '+m.a+' × '+m.b+' = <b>'+(m.a*m.b)+'</b></div><div class="mw">'+(m.given != null ? '❌ You said <s>'+m.given+'</s>' : '⏰ Ran out of time')+'</div><div class="mt">💡 '+esc(tipFor(m.a, m.b))+'</div></div>').join("");
+  $("#rMistakes").innerHTML = ms.map(m => '<div class="mistake"><div class="mq">✅ '+m.a+' × '+m.b+' = <b>'+(m.a*m.b)+'</b></div><div class="mw">'+(m.given != null ? '❌ You said <s>'+m.given+'</s>' : '⏰ Ran out of time')+'</div><div class="mt">💡 '+esc(tipParts(m.a, m.b).how)+'<br><b style="font-size:17px;color:#fff">'+esc(tipParts(m.a, m.b).ex)+'</b></div></div>').join("");
   $("#againBtn").onclick = () => startQuiz(q.mode);
   const reveal = () => {
     show("results");
