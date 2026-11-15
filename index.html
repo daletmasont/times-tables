@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Times Tables">
-<meta name="app-version" content="2026.11.15j">
+<meta name="app-version" content="2026.11.15k">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-512.png">
 <title>Times Tables Quest</title>
@@ -89,6 +89,10 @@ h1,h2,h3,.display{font-family:"Lilita One",Nunito,sans-serif;font-weight:400;let
 .m5 .tag{background:rgba(255,255,255,.35)}
 .m6{background:linear-gradient(140deg,#14b8a6,#0e7490)}
 .m7{background:linear-gradient(140deg,#9b6bff,#5b2bd6)}
+.m8{background:linear-gradient(140deg,#ff6ec7,#d61f69)}
+.question .q.long{font-size:64px}
+.question .q.xlong{font-size:40px;line-height:1.25}
+@media (max-width:820px){.question .q.long{font-size:52px}.question .q.xlong{font-size:30px}}
 .mode.wide{grid-column:1/-1;min-height:130px}
 .mode.done{filter:saturate(.55)}
 .mode.locked{filter:grayscale(.75);opacity:.75}
@@ -345,7 +349,8 @@ input.txt{height:52px;border-radius:14px;border:1px solid var(--line);background
     <button class="mode m3" data-mode="blitz"><span class="tag">×1.5 points</span><h3>Blitz</h3><p id="blitzDesc">As many as you can in 60 seconds.</p><span class="em">⚡</span></button>
     <button class="mode m4" data-mode="tricky"><span class="tag">×1.5 points</span><h3>Tricky Ones</h3><p>Your hardest facts. Beat them for bonus points.</p><span class="em">🧠</span></button>
     <button class="mode m6" data-mode="division" id="divCard"><span class="tag">×1.5 points</span><h3>Division</h3><p id="divDesc">Like 56 ÷ 7.</p><span class="em">➗</span></button>
-    <button class="mode m7" data-mode="learn"><span class="tag">Tips on</span><h3>Learn</h3><p>See the trick for a table, then practise it.</p><span class="em">📖</span></button>
+    <button class="mode m8" data-mode="inverse"><span class="tag">×1.5 points</span><h3>Missing Numbers</h3><p>Like 7 × ? = 56. Times and divide undo each other!</p><span class="em">🔄</span></button>
+    <button class="mode m7 wide" data-mode="learn"><span class="tag">Tips on</span><h3>Learn</h3><p>See the trick for a table, then practise it.</p><span class="em">📖</span></button>
   </div>
 </section>
 
@@ -628,8 +633,8 @@ const DEFP = () => ({
   agg: { timed:{a:0,c:0}, untimed:{a:0,c:0}, mc:{a:0,c:0}, type:{a:0,c:0} },
   errs: { neighbour:0, close:0, timeout:0, other:0 },
   daily: {}, sessions: [], rewards: [], best: {},
-  review: {}, div: {}, badges: {}, dailyDone: {}, champWeeks: [],
-  counts: { fix: 0, reviewGrad: 0, daily: 0, divCorrect: 0, chalWon: 0, champ: 0 }
+  review: {}, div: {}, inv: {}, badges: {}, dailyDone: {}, champWeeks: [],
+  counts: { fix: 0, reviewGrad: 0, daily: 0, divCorrect: 0, chalWon: 0, champ: 0, invCorrect: 0 }
 });
 function merge(base, obj){
   for (const k in obj){
@@ -1045,8 +1050,8 @@ function hintParts(a, b){ // same tip with the answer hidden, for the fix-up rou
   const i = t.ex.lastIndexOf(s);
   return { how: t.how, ex: i >= 0 ? t.ex.slice(0, i) + "?" + t.ex.slice(i + s.length) : t.ex };
 }
-function showTip(a, b, hide, div){
-  const t = div ? (hide ? divHint(a, b) : divTip(a, b)) : (hide ? hintParts(a, b) : tipParts(a, b)), el = $("#tip");
+function showTip(a, b, hide, div, inv){
+  const t = inv ? invTip({ a, b, inv }, hide) : div ? (hide ? divHint(a, b) : divTip(a, b)) : (hide ? hintParts(a, b) : tipParts(a, b)), el = $("#tip");
   el.innerHTML = '<div class="how">💡 ' + esc(t.how) + '</div><div class="ex">' + esc(t.ex) + '</div>';
   el.classList.add("on");
 }
@@ -1058,7 +1063,7 @@ const REPEAT = [1, 0.75, 0.5, 0.25];
 function repeatMult(c){
   const dk = dayKey(), d = S.daily[dk] || (S.daily[dk] = { n: 0, c: 0, p: 0 });
   if (!d.f){ d.f = {}; for (const k in S.daily) if (k !== dk && S.daily[k].f) delete S.daily[k].f; } // only keep today's counts
-  const key = c.div ? "d" + (c.a * c.b) + "/" + c.a : Math.min(c.a, c.b) + "x" + Math.max(c.a, c.b);
+  const key = c.inv ? qKey(c) : c.div ? "d" + (c.a * c.b) + "/" + c.a : Math.min(c.a, c.b) + "x" + Math.max(c.a, c.b);
   const n = d.f[key] || 0;
   d.f[key] = n + 1;
   return REPEAT[Math.min(n, REPEAT.length - 1)];
@@ -1081,7 +1086,8 @@ const MODES = {
   tricky:   { n: 10, timed: false, mult: 1.5 },
   daily:    { n: 10, timed: false, mult: 1.5 },
   division: { n: 10, timed: false, mult: 1.5 },
-  learn:    { n: 10, timed: false, mult: 0.5 }
+  learn:    { n: 10, timed: false, mult: 0.5 },
+  inverse:  { n: 10, timed: false, mult: 1.5 }
 };
 function startQuiz(mode, opts = {}){ playGate(() => beginQuiz(mode, opts)); }
 function beginQuiz(mode, opts){
@@ -1127,6 +1133,7 @@ function padPress(k){
   drawEntry();
   if (Q.entry.length === String(qAns(Q.cur)).length && Number(Q.entry) === qAns(Q.cur)) setTimeout(() => { if (Q && !Q.locked && Q.entry) answer(Number(Q.entry)); }, 120);
 }
+function sizeQ(){ const el = $("#qText"), n = el.textContent.length; el.classList.toggle("long", n > 11 && n <= 20); el.classList.toggle("xlong", n > 20); }
 function drawEntry(){ const box = $("#ansBox"); box.textContent = Q.entry || "?"; box.classList.toggle("empty", !Q.entry); }
 function nextQ(){
   if (!Q) return;
@@ -1135,17 +1142,18 @@ function nextQ(){
   let c;
   if (Q.fixed && Q.fi < Q.fixed.length) c = Object.assign({}, Q.fixed[Q.fi++]);
   else if (Q.mode === "division") c = pickDiv(Q.pool);
+  else if (Q.mode === "inverse"){ const [a, b] = pick(Q.pool); c = { a, b, div: false, inv: INV_KINDS[Math.floor(Math.random() * INV_KINDS.length)] }; }
   else { const [a, b] = pick(Q.pool); c = { a, b, div: false }; }
   c.shownAt = now(); Q.cur = c;
   if (Q.mode === "blitz") Q.asked.push(c);
   Q.entry = ""; Q.locked = false;
-  $("#qText").textContent = qStr(c);
+  $("#qText").textContent = qStr(c); sizeQ();
   $("#fb").textContent = ""; $("#fb").className = "fb";
   hideTip();
   if (Q.mode === "learn") showTip(c.a, c.b, true, c.div);
   $("#qBox").classList.remove("good", "bad");
   if (Q.style === "mc"){
-    const opts = c.div ? divDistractors(c.a, c.b) : distractors(c.a, c.b);
+    const opts = c.inv ? invOptions(c) : c.div ? divDistractors(c.a, c.b) : distractors(c.a, c.b);
     $$(".choice").forEach((btn, i) => { btn.textContent = opts[i]; btn.classList.remove("right", "wrong"); });
   } else drawEntry();
   $("#qCount").textContent = Q.mode === "blitz" ? "⚡ " + Q.correct + " correct" : (Q.i + 1) + " / " + Q.m.n;
@@ -1186,9 +1194,10 @@ function answer(given, btn){
   Q.locked = true;
   cancelAnimationFrame(rafId);
   const c = Q.cur, { a, b, shownAt } = c, right = qAns(c), ms = now() - shownAt, ok = given === right;
-  const wasDue = !c.div && isDue(a, b);
-  const before = c.div ? null : factStats(a, b), fv = c.div ? Math.min(1.5, factValue(a, b) * 1.25) : factValue(a, b), mm = c.div ? 1 : masteryMult(before);
-  if (c.div) recordDiv(a, b, given, ok, ms); else record(a, b, given, ok, ms, Q.m.timed, Q.style);
+  const special = c.div || c.inv;
+  const wasDue = !special && isDue(a, b);
+  const before = special ? null : factStats(a, b), fv = special ? Math.min(1.5, factValue(a, b) * 1.25) : factValue(a, b), mm = special ? 1 : masteryMult(before);
+  if (c.inv) recordInv(c, given, ok, ms); else if (c.div) recordDiv(a, b, given, ok, ms); else record(a, b, given, ok, ms, Q.m.timed, Q.style);
   Q.i++;
   const box = $("#qBox");
   if (ok){
@@ -1211,13 +1220,13 @@ function answer(given, btn){
     if (btn) btn.classList.add("right");
   } else {
     Q.streak = 0;
-    Q.mistakes.push({ a, b, given, div: c.div });
+    Q.mistakes.push({ a, b, given, div: c.div, inv: c.inv });
     sfx.bad();
     box.classList.add("bad");
-    flashFb(given == null ? "⏰ Time's up! " + qStr(c) + " = " + right : "Not quite — " + qStr(c) + " = " + right, "no");
+    flashFb(given == null ? "⏰ Time's up! " + qFull(c) : "Not quite — " + qFull(c), "no");
     if (Q.style === "mc") $$(".choice").forEach(c => { if (Number(c.textContent) === right) c.classList.add("right"); else c.classList.add("wrong"); });
     else { $("#ansBox").textContent = right; $("#ansBox").classList.remove("empty"); }
-    if (Q.mode !== "blitz") showTip(a, b, false, c.div);
+    if (Q.mode !== "blitz") showTip(a, b, false, c.div, c.inv);
   }
   $("#qStreak").textContent = Q.streak;
   $("#qPts").textContent = Q.pts;
@@ -1270,7 +1279,7 @@ function endQuiz(){
       saveFamily();
     }
   }
-  S.sessions.unshift({ d: now(), mode: q.mode, style: q.style, n, c: q.correct, p: q.pts, avg: avg ? Math.round(avg) : null, tables: ["practice", "speed", "blitz"].includes(q.mode) ? S.tables.slice() : [], streak: q.best });
+  S.sessions.unshift({ d: now(), mode: q.mode, style: q.style, n, c: q.correct, p: q.pts, avg: avg ? Math.round(avg) : null, tables: ["practice", "speed", "blitz", "inverse"].includes(q.mode) ? S.tables.slice() : [], streak: q.best });
   S.sessions = S.sessions.slice(0, 60);
   save(true);
 
@@ -1278,7 +1287,7 @@ function endQuiz(){
   const title = q.mode === "blitz" ? q.correct + " in " + q.blitzTime + "s!" : acc === 1 ? "PERFECT!" : acc >= .9 ? "Brilliant!" : acc >= .7 ? "Great work!" : acc >= .5 ? "Good effort!" : "Keep practising!";
   $("#resEm").textContent = newBest ? "🥇" : em;
   $("#resTitle").textContent = title;
-  $("#resSub").textContent = newBest ? "NEW BLITZ RECORD! 🎉" : q.mode === "blitz" ? "Your best: " + (S.best["blitz_" + q.style] || q.correct) : ({practice:"Practice",speed:"Speed Run",tricky:"Tricky Ones",daily:"Daily Challenge",division:"Division",learn:"Learn: the " + q.table + "s"})[q.mode] + " · " + (q.style === "mc" ? "Multiple choice" : "Typed answers");
+  $("#resSub").textContent = newBest ? "NEW BLITZ RECORD! 🎉" : q.mode === "blitz" ? "Your best: " + (S.best["blitz_" + q.style] || q.correct) : ({practice:"Practice",speed:"Speed Run",tricky:"Tricky Ones",daily:"Daily Challenge",division:"Division",inverse:"Missing Numbers",learn:"Learn: the " + q.table + "s"})[q.mode] + " · " + (q.style === "mc" ? "Multiple choice" : "Typed answers");
   $("#rCorrect").textContent = q.correct + "/" + n;
   $("#rPts").textContent = "+" + q.pts;
   $("#rTime").textContent = avg ? (avg / 1000).toFixed(1) + "s" : "–";
@@ -1304,8 +1313,8 @@ function endQuiz(){
   $("#chalBtn").onclick = () => chooseOpponent(q);
   const seen = new Set(), ms = q.mistakes.filter(m => { const k = qKey(m); if (seen.has(k)) return false; seen.add(k); return true; });
   $("#rMistakesWrap").style.display = ms.length ? "" : "none";
-  $("#rMistakes").innerHTML = ms.map(m => { const t = m.div ? divTip(m.a, m.b) : tipParts(m.a, m.b);
-    return '<div class="mistake"><div class="mq">✅ '+qStr(m)+' = <b>'+qAns(m)+'</b></div><div class="mw">'+(m.given != null ? '❌ You said <s>'+m.given+'</s>' : '⏰ Ran out of time')+'</div><div class="mt">💡 '+esc(t.how)+'<br><b style="font-size:17px;color:#fff">'+esc(t.ex)+'</b></div></div>'; }).join("");
+  $("#rMistakes").innerHTML = ms.map(m => { const t = m.inv ? invTip(m, false) : m.div ? divTip(m.a, m.b) : tipParts(m.a, m.b);
+    return '<div class="mistake"><div class="mq">✅ '+(m.inv ? esc(qFull(m)) : qStr(m)+' = <b>'+qAns(m)+'</b>')+'</div><div class="mw">'+(m.given != null ? '❌ You said <s>'+m.given+'</s>' : '⏰ Ran out of time')+'</div><div class="mt">💡 '+esc(t.how)+'<br><b style="font-size:17px;color:#fff">'+esc(t.ex)+'</b></div></div>'; }).join("");
   $("#againBtn").onclick = () => q.chal ? startQuiz("blitz") : startQuiz(q.mode, { table: q.table });
   const reveal = () => {
     show("results");
@@ -1333,14 +1342,14 @@ function nextFix(){
   if (!Q || Q.mode !== "fix") return;
   if (Q.idx >= Q.list.length) return endFix();
   const m = Q.list[Q.idx];
-  Q.cur = { a: m.a, b: m.b, div: !!m.div, shownAt: now() };
+  Q.cur = { a: m.a, b: m.b, div: !!m.div, inv: m.inv, shownAt: now() };
   Q.entry = ""; Q.locked = false; Q.tries = 0;
-  $("#qText").textContent = qStr(Q.cur);
+  $("#qText").textContent = qStr(Q.cur); sizeQ();
   $("#qBox").classList.remove("good", "bad");
   drawEntry();
   $("#qCount").textContent = "🔧 " + (Q.idx + 1) + " / " + Q.list.length;
   flashFb("You got this one wrong. What's the answer?", "ok");
-  showTip(m.a, m.b, true, m.div);
+  showTip(m.a, m.b, true, m.div, m.inv);
 }
 function fixPress(k){
   if (k === "⌫"){ Q.entry = Q.entry.slice(0, -1); sfx.tap(); drawEntry(); return; }
@@ -1354,7 +1363,7 @@ function fixAnswer(v){
   Q.locked = true;
   if (v === right){
     sfx.good(); box.classList.add("good");
-    flashFb("✅ Fixed! " + qStr(Q.cur) + " = " + right, "ok");
+    flashFb("✅ Fixed! " + qFull(Q.cur), "ok");
     S.counts.fix++;
     setTimeout(() => { if (Q && Q.mode === "fix"){ Q.idx++; nextFix(); } }, 1100);
   } else {
@@ -1375,9 +1384,34 @@ const ordinal = n => n + (["th","st","nd","rd"][(n % 100 - 20) % 10] || ["th","s
 
 /* ================= NEW FEATURES ================= */
 const DAY = 864e5;
-const qAns = c => c.div ? c.b : c.a * c.b;
-const qStr = c => c.div ? (c.a * c.b) + " ÷ " + c.a : c.a + " × " + c.b;
-const qKey = c => c.div ? "d" + (c.a * c.b) + "/" + c.a : c.a + "x" + c.b;
+/* inverse (missing number) kinds: mx1 = a × ? = ab, mx2 = ? × b = ab, dv2 = ab ÷ ? = b, fam = a × b = ab, so ab ÷ b = ? */
+const INV_KINDS = ["mx1", "mx2", "dv2", "fam"];
+const qAns = c => c.inv ? (c.inv === "mx1" ? c.b : c.a) : c.div ? c.b : c.a * c.b;
+const qStr = c => { const ab = c.a * c.b;
+  if (c.inv === "mx1") return c.a + " × ? = " + ab;
+  if (c.inv === "mx2") return "? × " + c.b + " = " + ab;
+  if (c.inv === "dv2") return ab + " ÷ ? = " + c.b;
+  if (c.inv === "fam") return c.a + " × " + c.b + " = " + ab + ", so " + ab + " ÷ " + c.b + " = ?";
+  return c.div ? ab + " ÷ " + c.a : c.a + " × " + c.b; };
+const qFull = c => c.inv ? qStr(c).replace("?", qAns(c)) : qStr(c) + " = " + qAns(c);
+const qKey = c => c.inv ? "i" + c.inv + ":" + c.a + "x" + c.b : c.div ? "d" + (c.a * c.b) + "/" + c.a : c.a + "x" + c.b;
+function invTip(c, hide){
+  const { a, b } = c, ab = a * b;
+  if (c.inv === "mx1" || c.inv === "mx2"){
+    const step = c.inv === "mx1" ? a : b, n = c.inv === "mx1" ? b : a;
+    return { how: "Count up in " + step + "s to " + ab, ex: n <= 3 ? Array.from({ length: n }, (_, i) => step * (i + 1)).join(", ") + (hide ? ": how many jumps?" : ": that's " + n + " jumps") : step + ", " + step * 2 + ", " + step * 3 + " … " + ab + (hide ? ": how many jumps?" : ": that's " + n + " jumps") };
+  }
+  if (c.inv === "dv2") return { how: "÷ undoes ×. What times " + b + " makes " + ab + "?", ex: hide ? "? × " + b + " = " + ab : a + " × " + b + " = " + ab };
+  return { how: "× and ÷ undo each other. Use the first sum!", ex: hide ? ab + " ÷ " + b + " = ?" : ab + " ÷ " + b + " = " + a };
+}
+function invOptions(c){ const ans = qAns(c), other = ans === c.a ? c.b : c.a; return divDistractors(other, ans); }
+function recordInv(c, given, ok, ms){
+  const k = qKey(c), f = S.inv[k] || (S.inv[k] = { a: 0, c: 0, s: 0, w: [] });
+  f.a++;
+  if (ok){ f.c++; f.s++; S.counts.invCorrect++; } else { f.s = 0; if (given != null) f.w = [given].concat(f.w).slice(0, 6); }
+  const dk = dayKey(); const d = S.daily[dk] || (S.daily[dk] = { n: 0, c: 0, p: 0 });
+  d.n++; if (ok) d.c++;
+}
 
 /* ---------- spaced review: wrong sums come back after 1, 3 and 7 days ---------- */
 const REVIEW_GAPS = [1, 3, 7];
@@ -1415,6 +1449,7 @@ function buildDaily(){
   if (dt.length){ for (let i = 0; i < 2; i++){ const t = dt[Math.floor(Math.random() * dt.length)]; add(t, 2 + Math.floor(Math.random() * 11), true); } }
   let pool = [];
   for (let t = 2; t <= 12; t++){ if (tableStats(t).a > 0 || S.tables.includes(t)) for (let b = 2; b <= 12; b++) pool.push([t, b]); }
+  if (pool.length && list.length < 10){ const [a, b] = pool[Math.floor(Math.random() * pool.length)]; const k = "i" + a + "x" + b; if (!seen.has(k)){ seen.add(k); list.push({ a, b, div: false, inv: INV_KINDS[Math.floor(Math.random() * INV_KINDS.length)] }); } }
   if (!pool.length) pool = candidates();
   let guard = 0;
   while (list.length < 10 && guard++ < 200){ const [a, b] = pick(pool); add(a, b); }
@@ -1498,6 +1533,7 @@ const BADGES = [
   { id: "fixer", ic: "🔧", name: "Fixer", desc: "Fix 20 mistakes in fix-up rounds", ok: p => p.counts.fix >= 20 },
   { id: "review", ic: "🧠", name: "Never forget", desc: "Beat 10 sums in review", ok: p => p.counts.reviewGrad >= 10 },
   { id: "divider", ic: "➗", name: "Divider", desc: "Get 25 divisions right", ok: p => p.counts.divCorrect >= 25 },
+  { id: "detective", ic: "🔍", name: "Number detective", desc: "Find 25 missing numbers", ok: p => (p.counts.invCorrect || 0) >= 25 },
   { id: "challenger", ic: "⚔️", name: "Challenger", desc: "Win a challenge", ok: p => p.counts.chalWon >= 1 },
   { id: "champion", ic: "👑", name: "Champion", desc: "Win the week on the leaderboard", ok: p => p.counts.champ >= 1 },
   ...[2,3,4,5,6,7,8,9,10,11,12].map(t => ({ id: "m" + t, num: t, name: t + "s master", desc: "Master every " + t + "s sum", ok: p => { for (let b = 1; b <= 12; b++) if (level(factStats(t, b, p)) < 4) return false; return true; } })),
@@ -1818,7 +1854,7 @@ function renderProgress(){
     tbh += '<div class="r"><span class="display" style="font-size:18px">' + t + 's</span><div class="t"><i style="width:' + pct + '%;background:' + col + '"></i></div><span class="muted">' + (s.acc == null ? "–" : pct + "%") + '</span></div>';
   }
   $("#tbars").innerHTML = tbh;
-  const names = { practice: "🎯 Practice", speed: "⏱️ Speed Run", blitz: "⚡ Blitz", tricky: "🧠 Tricky Ones", daily: "📅 Daily", division: "➗ Division", learn: "📖 Learn" };
+  const names = { practice: "🎯 Practice", speed: "⏱️ Speed Run", blitz: "⚡ Blitz", tricky: "🧠 Tricky Ones", daily: "📅 Daily", division: "➗ Division", learn: "📖 Learn", inverse: "🔄 Missing" };
   renderBadges();
   $("#sessions").innerHTML = S.sessions.slice(0, 12).map(s => '<div class="it"><span>' + names[s.mode] + ' <span class="muted small">' + (s.style === "mc" ? "choice" : "typed") + '</span></span><span>' + s.c + '/' + s.n + ' · +' + s.p + ' <span class="muted small">' + new Date(s.d).toLocaleDateString(undefined, { day: "numeric", month: "short" }) + '</span></span></div>').join("") || '<div class="muted">No games yet.</div>';
   $("#rewards").innerHTML = S.rewards.slice().reverse().map(r => '<div class="it"><span>🏆 ' + esc(r.label || (r.reward.toLocaleString() + " V-Bucks")) + '</span><span class="muted">' + new Date(r.d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) + '</span></div>').join("") || '<div class="muted">' + (S.settings.rewardsOn ? "None yet — keep going!" : "Rewards are off for this player.") + '</div>';
@@ -1984,7 +2020,7 @@ document.addEventListener("click", e => {
     const mode = md.dataset.mode;
     if (mode === "learn"){ sfx.tap(); learnT = S.tables.find(t => t >= 2) || 7; show("learn"); return; }
     if (mode === "division" && !divTables().length){ message("🔒", "Division is locked", "Get most of a times table to yellow or green on your map (8 of its sums) and its division unlocks. Keep going!", [["OK", "y"]]); return; }
-    if (!S.tables.length && ["practice", "speed", "blitz"].includes(mode)){ message("🤔", "Pick some tables", "Tap at least one times table number first.", [["OK", "y"]]); return; }
+    if (!S.tables.length && ["practice", "speed", "blitz", "inverse"].includes(mode)){ message("🤔", "Pick some tables", "Tap at least one times table number first.", [["OK", "y"]]); return; }
     startQuiz(mode); return;
   }
   const lt = e.target.closest("[data-learn]"); if (lt){ learnT = Number(lt.dataset.learn); sfx.tap(); renderLearn(); return; }
