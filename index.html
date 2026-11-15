@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Times Tables">
+<meta name="app-version" content="2026.11.15a">
 <title>Times Tables Quest</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
@@ -98,7 +99,12 @@ h1,h2,h3,.display{font-family:"Lilita One",Nunito,sans-serif;font-weight:400;let
 .question.bad{animation:shake .45s}
 @keyframes good{40%{transform:scale(1.05);background:rgba(61,220,132,.35)}}
 @keyframes shake{20%,60%{transform:translateX(-12px)}40%,80%{transform:translateX(12px)}}
-.fb{position:absolute;left:0;right:0;bottom:18px;font-size:24px;min-height:32px}
+.fb{margin-top:16px;font-size:24px;min-height:32px;padding:0 12px}
+.tip{margin:12px auto 0;max-width:520px;padding:10px 16px;border-radius:16px;background:rgba(255,210,63,.16);border:1px solid rgba(255,210,63,.5);color:#ffe9a3;font-size:18px;line-height:1.35;display:none}
+.tip.on{display:block}
+.fixtag{display:none;margin:0 auto 10px;padding:6px 14px;border-radius:999px;background:rgba(45,225,252,.2);border:1px solid rgba(45,225,252,.6);color:#bff6ff;font-size:16px}
+.fixtag.on{display:inline-block}
+.mistake .mt{font-size:14px;color:#ffe9a3;max-width:260px;line-height:1.3}
 .fb.ok{color:var(--green)} .fb.no{color:#ffb3b5}
 .pad{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .key{height:84px;border-radius:20px;background:#fff;color:#2d1580;font-family:"Lilita One";font-size:40px;box-shadow:0 6px 0 #b9aee8}
@@ -320,9 +326,11 @@ input.txt{height:52px;border-radius:14px;border:1px solid var(--line);background
   <div class="timer" id="timer"><i id="timerFill"></i></div>
   <div class="qwrap">
     <div class="question" id="qBox">
+      <div><span class="fixtag" id="fixTag">🔧 Fix-up round: type the right answer</span></div>
       <div class="q" id="qText">7 × 8</div>
       <div class="answerbox empty" id="ansBox">?</div>
       <div class="fb" id="fb"></div>
+      <div class="tip" id="tip"></div>
     </div>
     <div id="inputArea"></div>
   </div>
@@ -469,6 +477,7 @@ input.txt{height:52px;border-radius:14px;border:1px solid var(--line);background
   <div class="card" style="margin-top:18px">
     <h3 style="font-size:22px">Online saving</h3>
     <div class="muted small" id="syncInfo" style="margin:6px 0 4px;line-height:1.4"></div>
+    <div class="muted small" id="verInfo" style="margin-top:4px"></div>
     <div id="syncControls">
       <div class="field"><label>Family code<small>Use the same code on every device</small></label>
         <input class="txt" id="codeInput" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste code" style="font-family:ui-monospace,Menlo,monospace;font-size:15px;width:300px"></div>
@@ -745,6 +754,22 @@ function listen(){
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && !Q) syncNow(); });
   window.addEventListener("online", () => flush());
 }
+let updating = false;
+async function checkUpdate(){
+  if (updating || Q || (window.claude && window.claude.use) || !/^https?:$/.test(location.protocol)) return;
+  try {
+    const r = await fetch(location.pathname + "?check=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return;
+    const m = (await r.text()).match(new RegExp('name="app-' + 'version" content="([0-9A-Za-z.]+)"'));
+    if (!m || m[1] === APP_VERSION) return;
+    let tried = null; try { tried = sessionStorage.getItem("ttq_upd"); } catch(e){}
+    if (tried === m[1]) return; // already tried this version once this session
+    try { sessionStorage.setItem("ttq_upd", m[1]); } catch(e){}
+    updating = true;
+    setSync("⬆️ Updating to the latest version…");
+    setTimeout(() => location.replace(location.pathname + "?v=" + encodeURIComponent(m[1])), 600);
+  } catch(e){}
+}
 async function initCloud(){
   backend = await pickBackend();
   if (!backend){ setSync("📱 Saved on this device"); return; }
@@ -812,15 +837,18 @@ function masteredCount(p = S){
   for (let a = 1; a <= 12; a++) for (let b = a; b <= 12; b++) if (level(factStats(a, b, p)) === 4) n++;
   return n;
 }
-function tableStats(t, p = S){
-  let a = 0, c = 0, tm = 0;
-  for (let b = 1; b <= 12; b++){
+function tableStats(t, p = S){ // ignores x1 and x2 partners so easy sums don't make a table look strong
+  let a = 0, c = 0, tm = 0, facts = 0;
+  const from = t <= 2 ? 1 : 3;
+  for (let b = from; b <= 12; b++){
+    let tried = false;
     [t+"x"+b, b+"x"+t].forEach((k, i) => {
       if (i === 1 && b === t) return;
-      const f = p.facts[k]; if (f){ a += f.a; c += f.c; tm += f.t; }
+      const f = p.facts[k]; if (f){ a += f.a; c += f.c; tm += f.t; tried = true; }
     });
+    if (tried) facts++;
   }
-  return { a, c, acc: a ? c / a : null, avg: c ? tm / c : null };
+  return { a, c, facts, acc: a ? c / a : null, avg: c ? tm / c : null };
 }
 function dayStreak(p = S){
   let n = 0, t = now();
@@ -907,7 +935,45 @@ function distractors(a, b){
 }
 
 /* ---------- quiz engine ---------- */
+const APP_VERSION = (document.querySelector("meta[name=app-version]") || {}).content || "dev";
 let Q = null, rafId = 0;
+/* ---------- tips ---------- */
+function tipFor(a, b){
+  const ans = a * b;
+  if ((a === 7 && b === 8) || (a === 8 && b === 7)) return "5, 6, 7, 8 → 56 = 7 × 8. The numbers go in order!";
+  if (a === b && a === 7) return "Seven sevens are forty-nine. Say it like a rhyme!";
+  if (a === b && a === 12) return "12 × 12 = 144 (it's called a gross).";
+  const order = [1, 10, 2, 5, 11, 9, 4, 3, 6, 8, 12, 7];
+  let t = order.find(x => (x === a || x === b) && !(x === 11 && Math.max(a === 11 ? b : a, 0) > 9));
+  if (t === undefined) t = (a === 11 || b === 11) ? 11 : Math.min(a, b);
+  const n = t === a ? b : a;
+  switch (t){
+    case 1: return "Anything × 1 stays the same: " + n + " × 1 = " + n + ".";
+    case 10: return "× 10: put a 0 on the end. " + n + " → " + n + "0.";
+    case 2: return "× 2 means double it: " + n + " + " + n + " = " + ans + ".";
+    case 5: return "× 5 is half of × 10: " + n + " × 10 = " + (n * 10) + ", half is " + ans + ".";
+    case 11: return n <= 9 ? "× 11 with a single digit: write it twice! " + n + n + "." : "× 11: do × 10 and add one more lot. " + (n * 10) + " + " + n + " = " + ans + ".";
+    case 9: return "× 9: do × 10 then take one lot away. " + (n * 10) + " − " + n + " = " + ans + ".";
+    case 4: return "× 4: double, then double again. " + n + " → " + (n * 2) + " → " + ans + ".";
+    case 3: return "× 3: double it, then add one more lot. " + (n * 2) + " + " + n + " = " + ans + ".";
+    case 6: return "× 6: do × 5, then add one more lot. " + (n * 5) + " + " + n + " = " + ans + ".";
+    case 8: return "× 8: double, double, double! " + n + " → " + (n * 2) + " → " + (n * 4) + " → " + ans + ".";
+    case 12: return "× 12: do × 10, then add × 2. " + (n * 10) + " + " + (n * 2) + " = " + ans + ".";
+    case 7: return "× 7: do × 5 and add × 2. " + (n * 5) + " + " + (n * 2) + " = " + ans + ".";
+  }
+  return "";
+}
+function hintFor(a, b){ // the method without the answer, for the fix-up round
+  const ans = a * b;
+  if ((a === 7 && b === 8) || (a === 8 && b === 7)) return "Think 5, 6, 7, 8. The numbers go in order!";
+  if (a === 7 && b === 7) return "Remember the rhyme: seven sevens are forty-…?";
+  if (a === 12 && b === 12) return "It's called a gross. Do 12 × 10, then add 12 × 2.";
+  if ((a === 11 && b <= 9) || (b === 11 && a <= 9)) return "× 11 with a single digit: write the digit twice!";
+  const t = tipFor(a, b), i = t.lastIndexOf(String(ans));
+  return i >= 0 ? (t.slice(0, i) + "?" + t.slice(i + String(ans).length)).replace("?.", "?") : t;
+}
+function showTip(a, b, hide){ const el = $("#tip"); el.textContent = "💡 " + (hide ? hintFor(a, b) : tipFor(a, b)); el.classList.add("on"); }
+function hideTip(){ $("#tip").classList.remove("on"); }
 // How hard a sum is: the EASIER of the two numbers decides it (2x7 is easy, 7x8 is hard)
 const DIFF = { 1:0.15, 2:0.4, 10:0.4, 5:0.6, 11:0.6, 3:0.8, 4:0.8, 9:1.0, 6:1.1, 12:1.15, 7:1.3, 8:1.3 };
 function factValue(a, b){
@@ -935,6 +1001,7 @@ function startQuiz(mode){
   Q = { mode, style, m, pool, i: 0, correct: 0, pts: 0, streak: 0, best: 0, times: [], mistakes: [],
         blitzEnd: mode === "blitz" ? now() + S.settings.blitzTime * 1000 : 0, locked: false, cur: null, entry: "" };
   show("quiz");
+  $("#fixTag").classList.remove("on"); hideTip();
   $("#timer").style.visibility = m.timed ? "visible" : "hidden";
   $("#qStreak").textContent = 0; $("#qPts").textContent = 0;
   buildInput();
@@ -957,6 +1024,7 @@ function buildInput(){
 }
 function padPress(k){
   if (!Q || Q.locked) return;
+  if (Q.mode === "fix") return fixPress(k);
   if (k === "⌫"){ Q.entry = Q.entry.slice(0, -1); sfx.tap(); }
   else if (k === "✓"){ if (Q.entry) answer(Number(Q.entry)); return; }
   else if (Q.entry.length < 3){ Q.entry += k; sfx.tap(); }
@@ -973,6 +1041,7 @@ function nextQ(){
   Q.entry = ""; Q.locked = false;
   $("#qText").textContent = a + " × " + b;
   $("#fb").textContent = ""; $("#fb").className = "fb";
+  hideTip();
   $("#qBox").classList.remove("good", "bad");
   if (Q.style === "mc"){
     const opts = distractors(a, b);
@@ -1043,11 +1112,12 @@ function answer(given, btn){
     flashFb(given == null ? "⏰ Time's up! " + a + " × " + b + " = " + right : "Not quite — " + a + " × " + b + " = " + right, "no");
     if (Q.style === "mc") $$(".choice").forEach(c => { if (Number(c.textContent) === right) c.classList.add("right"); else c.classList.add("wrong"); });
     else { $("#ansBox").textContent = right; $("#ansBox").classList.remove("empty"); }
+    if (Q.mode !== "blitz") showTip(a, b);
   }
   $("#qStreak").textContent = Q.streak;
   $("#qPts").textContent = Q.pts;
   save();
-  const wait = Q.mode === "blitz" ? (ok ? 280 : 1100) : (ok ? 650 : 1700);
+  const wait = Q.mode === "blitz" ? (ok ? 280 : 1100) : (ok ? 650 : 3200);
   setTimeout(nextQ, wait);
 }
 function flashFb(t, cls){ const f = $("#fb"); f.textContent = t; f.className = "fb " + cls; }
@@ -1057,7 +1127,7 @@ function flyPoints(txt, el){
   d.style.left = (r.left + r.width / 2 - 30) + "px"; d.style.top = r.top + "px";
   document.body.appendChild(d); setTimeout(() => d.remove(), 1000);
 }
-function quitQuiz(){ if (!Q) return; cancelAnimationFrame(rafId); if (Q.i > 0) endQuiz(); else { Q = null; show("home"); } }
+function quitQuiz(){ if (!Q) return; cancelAnimationFrame(rafId); if (Q.mode === "fix") return endFix(); if (Q.i > 0) endQuiz(); else { Q = null; show("home"); } }
 function rankOf(id, metric){
   const rows = boardRows(metric).filter(r => r.val > 0);
   const i = rows.findIndex(r => r.id === id);
@@ -1105,13 +1175,65 @@ function endQuiz(){
   const seen = new Set(), ms = q.mistakes.filter(m => { const k = m.a+"x"+m.b; if (seen.has(k)) return false; seen.add(k); return true; });
   $("#rMistakesWrap").style.display = ms.length ? "" : "none";
   $("#rMistakes").innerHTML = ms.map(m => '<div class="mistake"><div class="mq">✅ '+m.a+' × '+m.b+' = <b>'+(m.a*m.b)+'</b></div><div class="mw">'+(m.given != null ? '❌ You said <s>'+m.given+'</s>' : '⏰ Ran out of time')+'</div></div>').join("");
+  $("#rMistakes").innerHTML = ms.map(m => '<div class="mistake"><div class="mq">✅ '+m.a+' × '+m.b+' = <b>'+(m.a*m.b)+'</b></div><div class="mw">'+(m.given != null ? '❌ You said <s>'+m.given+'</s>' : '⏰ Ran out of time')+'</div><div class="mt">💡 '+esc(tipFor(m.a, m.b))+'</div></div>').join("");
   $("#againBtn").onclick = () => startQuiz(q.mode);
-  show("results");
-  if (acc >= .9 && n >= 5){ confetti(120); sfx.win(); }
-  if (rew && S.points >= g && !S._celebrated){
-    S._celebrated = true; save(true);
-    setTimeout(() => { confetti(260); sfx.win(); message("🏆", "GOAL REACHED!", "You hit " + g + " points! Show a grown-up so they can unlock your " + S.settings.reward + " V-Bucks.", [["Awesome!", "y"]]); }, 900);
+  const reveal = () => {
+    show("results");
+    if (acc >= .9 && n >= 5){ confetti(120); sfx.win(); }
+    if (rew && S.points >= g && !S._celebrated){
+      S._celebrated = true; save(true);
+      setTimeout(() => { confetti(260); sfx.win(); message("🏆", "GOAL REACHED!", "You hit " + g + " points! Show a grown-up so they can unlock your " + S.settings.reward + " V-Bucks.", [["Awesome!", "y"]]); }, 900);
+    }
+  };
+  if (ms.length) startFix(ms, reveal); else reveal();
+}
+/* ---------- fix-up round: type the right answer to each mistake ---------- */
+function startFix(list, done){
+  Q = { mode: "fix", style: "type", list, idx: 0, done, entry: "", locked: false, cur: null, tries: 0 };
+  show("quiz");
+  $("#timer").style.visibility = "hidden";
+  $("#fixTag").classList.add("on");
+  buildInput();
+  nextFix();
+}
+function nextFix(){
+  if (!Q || Q.mode !== "fix") return;
+  if (Q.idx >= Q.list.length) return endFix();
+  const m = Q.list[Q.idx];
+  Q.cur = { a: m.a, b: m.b, shownAt: now() };
+  Q.entry = ""; Q.locked = false; Q.tries = 0;
+  $("#qText").textContent = m.a + " × " + m.b;
+  $("#qBox").classList.remove("good", "bad");
+  drawEntry();
+  $("#qCount").textContent = "🔧 " + (Q.idx + 1) + " / " + Q.list.length;
+  flashFb("You got this one wrong. What's the answer?", "ok");
+  showTip(m.a, m.b, true);
+}
+function fixPress(k){
+  if (k === "⌫"){ Q.entry = Q.entry.slice(0, -1); sfx.tap(); drawEntry(); return; }
+  if (k === "✓"){ if (Q.entry) fixAnswer(Number(Q.entry)); return; }
+  if (Q.entry.length < 3){ Q.entry += k; sfx.tap(); drawEntry(); }
+  const right = Q.cur.a * Q.cur.b;
+  if (Q.entry.length === String(right).length) setTimeout(() => { if (Q && Q.mode === "fix" && !Q.locked && Q.entry) fixAnswer(Number(Q.entry)); }, 150);
+}
+function fixAnswer(v){
+  const right = Q.cur.a * Q.cur.b, box = $("#qBox");
+  Q.locked = true;
+  if (v === right){
+    sfx.good(); box.classList.add("good");
+    flashFb("✅ Fixed! " + Q.cur.a + " × " + Q.cur.b + " = " + right, "ok");
+    setTimeout(() => { if (Q && Q.mode === "fix"){ Q.idx++; nextFix(); } }, 1100);
+  } else {
+    Q.tries++; sfx.bad(); box.classList.remove("bad"); void box.offsetWidth; box.classList.add("bad");
+    flashFb(Q.tries >= 2 ? "It's " + right + ". Type " + right + " to fix it." : "Not yet. Use the tip and try again!", "no");
+    setTimeout(() => { if (Q && Q.mode === "fix"){ Q.entry = ""; Q.locked = false; drawEntry(); } }, 700);
   }
+}
+function endFix(){
+  const done = Q && Q.done;
+  Q = null;
+  $("#fixTag").classList.remove("on"); hideTip();
+  if (done) done();
 }
 const ordinal = n => n + (["th","st","nd","rd"][(n % 100 - 20) % 10] || ["th","st","nd","rd"][n % 100] || "th");
 
@@ -1120,7 +1242,7 @@ function insights(p = S){
   const out = [];
   const totalA = p.agg.timed.a + p.agg.untimed.a;
   if (totalA < 10) return [{ ic: "👀", t: "Play a few games and I'll start spotting patterns — which tables are strong, which facts trip you up, and how you do under pressure." }];
-  const ts = []; for (let t = 2; t <= 12; t++){ const s = tableStats(t, p); if (s.a >= 6) ts.push({ t, ...s }); }
+  const ts = []; for (let t = 3; t <= 12; t++){ const s = tableStats(t, p); if (s.a >= 6 && s.facts >= 4) ts.push({ t, ...s }); }
   if (ts.length >= 2){
     ts.sort((x, y) => y.acc - x.acc || (x.avg || 0) - (y.avg || 0));
     const best = ts[0], worst = ts[ts.length - 1];
@@ -1299,6 +1421,7 @@ function renderParent(){
 }
 function renderSyncCard(){
   const info = $("#syncInfo"), ctr = $("#syncControls"), code = getCode();
+  $("#verInfo").textContent = "App version " + APP_VERSION + " · updates itself automatically";
   if (usingClaude){ info.textContent = "Saving through your Claude account. Nothing to set up here."; ctr.style.display = "none"; return; }
   if (!CLOUD.projectId || !CLOUD.apiKey){ info.textContent = "Online saving is off. Add your Firebase projectId and apiKey to the file to turn it on. Progress is saving on this device for now."; ctr.style.display = "none"; return; }
   ctr.style.display = "";
@@ -1522,6 +1645,8 @@ document.addEventListener("gesturestart", e => e.preventDefault());
 show(S ? "home" : "login");
 setSync("Getting ready…");
 initCloud();
+checkUpdate();
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
 })();
 </script>
 </body>
