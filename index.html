@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Times Tables">
-<meta name="app-version" content="2026.11.15g">
+<meta name="app-version" content="2026.11.15h">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-512.png">
 <title>Times Tables Quest</title>
@@ -927,7 +927,7 @@ function dayStreak(p = S){
   while (p.daily[dayKey(t)]){ n++; t -= 864e5; }
   return n;
 }
-function weekPoints(p){ return pointsBetween(p, mondayKey(0)); }
+function weekPoints(p){ return Math.max(0, pointsBetween(p, mondayKey(0))); }
 function accuracyOf(p){ const a = p.agg.timed.a + p.agg.untimed.a, c = p.agg.timed.c + p.agg.untimed.c; return { a, c, acc: a ? c / a : null }; }
 function record(a, b, given, ok, ms, timed, style){
   const k = a+"x"+b;
@@ -1976,7 +1976,16 @@ document.addEventListener("click", e => {
     sfx.tap(); savePlayer(p); renderParent(); return;
   }
   const adj = e.target.closest("[data-adj]");
-  if (adj && PP){ const p = PL[PP], v = Number(adj.dataset.adj); p.points = Math.max(0, p.points + v); if (v > 0) p.lifetime += v; if (p.points < p.settings.goal) p._celebrated = false; sfx.tap(); savePlayer(p); renderParent(); }
+  if (adj && PP){
+    const p = PL[PP], v = Number(adj.dataset.adj), dk = dayKey();
+    const d = p.daily[dk] || (p.daily[dk] = { n: 0, c: 0, p: 0 });
+    const change = Math.max(-p.points, v);            // never takes goal points below 0
+    p.points += change;
+    p.lifetime = Math.max(0, p.lifetime + change);    // all-time leaderboard
+    d.p = (d.p || 0) + change;                        // this week's leaderboard
+    if (p.points < p.settings.goal) p._celebrated = false;
+    sfx.tap(); savePlayer(p); renderParent();
+  }
 });
 $("#badgeStat").onclick = () => { sfx.tap(); show("progress"); setTimeout(() => $("#badgeCard").closest(".card").scrollIntoView({ block: "start" }), 120); };
 $("#learnBack").onclick = () => { sfx.tap(); show("home"); };
