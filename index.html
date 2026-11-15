@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Times Tables">
-<meta name="app-version" content="2026.11.15h">
+<meta name="app-version" content="2026.11.15j">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-512.png">
 <title>Times Tables Quest</title>
@@ -327,7 +327,7 @@ input.txt{height:52px;border-radius:14px;border:1px solid var(--line);background
 
   <div class="section-title">Pick your tables</div>
   <div class="tables" id="tables"></div>
-  <div class="muted small" style="margin:10px 2px 0">⭐ Harder tables earn more points. Easy ones like ×1 and ×2 earn the least, and sums you have mastered earn half.</div>
+  <div class="muted small" style="margin:10px 2px 0">⭐ Harder tables earn more points. Easy ones like ×1 and ×2 earn the least. Sums you've mastered, or already done today, earn less.</div>
 
   <div class="section-title">How do you want to answer?</div>
   <div class="seg" id="styleSeg">
@@ -1053,6 +1053,16 @@ function showTip(a, b, hide, div){
 function hideTip(){ $("#tip").classList.remove("on"); }
 // How hard a sum is: the EASIER of the two numbers decides it (2x7 is easy, 7x8 is hard)
 const DIFF = { 1:0.15, 2:0.4, 10:0.4, 5:0.6, 11:0.6, 3:0.8, 4:0.8, 9:1.0, 6:1.1, 12:1.15, 7:1.3, 8:1.3 };
+// how many times each sum has been answered correctly today: 1st = full points, then 75%, 50%, 25%
+const REPEAT = [1, 0.75, 0.5, 0.25];
+function repeatMult(c){
+  const dk = dayKey(), d = S.daily[dk] || (S.daily[dk] = { n: 0, c: 0, p: 0 });
+  if (!d.f){ d.f = {}; for (const k in S.daily) if (k !== dk && S.daily[k].f) delete S.daily[k].f; } // only keep today's counts
+  const key = c.div ? "d" + (c.a * c.b) + "/" + c.a : Math.min(c.a, c.b) + "x" + Math.max(c.a, c.b);
+  const n = d.f[key] || 0;
+  d.f[key] = n + 1;
+  return REPEAT[Math.min(n, REPEAT.length - 1)];
+}
 function factValue(a, b){
   let v = Math.min(DIFF[a] || 1, DIFF[b] || 1);
   if ((a === 11 && b > 9) || (b === 11 && a > 9)) v = Math.max(v, 1.0);
@@ -1184,13 +1194,15 @@ function answer(given, btn){
   if (ok){
     Q.correct++; Q.streak++; Q.best = Math.max(Q.best, Q.streak); Q.times.push(ms);
     S.bestStreak = Math.max(S.bestStreak, Q.streak);
-    let p = Math.max(1, Math.round((Q.style === "mc" ? 5 : 10) * Q.m.mult * fv * mm));
-    if (ms < 3000 && fv >= 0.8) p += 2;
-    let msg = ms < 3000 && fv >= 0.8 ? "⚡ Lightning fast!" : ["✅ Correct!", "🎉 Nailed it!", "💪 Yes!", "🔥 Great!"][Math.floor(Math.random() * 4)];
+    const rep = repeatMult(c);                       // same sum again today earns less
+    let p = Math.max(1, Math.round((Q.style === "mc" ? 5 : 10) * Q.m.mult * fv * mm * rep));
+    if (ms < 3000 && fv >= 0.8 && rep === 1) p += 2;
+    let msg = ms < 3000 && fv >= 0.8 && rep === 1 ? "⚡ Lightning fast!" : ["✅ Correct!", "🎉 Nailed it!", "💪 Yes!", "🔥 Great!"][Math.floor(Math.random() * 4)];
     if (mm > 1) msg = "🌟 Tricky one beaten! Bonus points";
     else if (wasDue) msg = "🔁 Remembered from before! Nice";
+    else if (rep < 1) msg += " Done this one today, so fewer points. Try new tables!";
     else if (fv < 0.5) msg += " Easy one, harder tables earn more";
-    if (Q.streak % 5 === 0){ const sb = Math.max(2, Math.round(10 * fv * Math.min(1, Q.m.mult))); p += sb; msg = "🔥 " + Q.streak + " in a row! +" + sb + " bonus"; sfx.streak(); } else sfx.good();
+    if (Q.streak % 5 === 0){ const sb = Math.max(2, Math.round(10 * fv * Math.min(1, Q.m.mult) * rep)); p += sb; msg = "🔥 " + Q.streak + " in a row! +" + sb + " bonus"; sfx.streak(); } else sfx.good();
     Q.pts += p; S.points += p; S.lifetime += p;
     S.daily[dayKey()].p += p;
     box.classList.add("good");
@@ -1495,7 +1507,7 @@ function badgeTotal(p){ return BADGES.filter(b => p.badges && p.badges[b.id]).le
 function badgeIcon(b){ return b.num ? '<span class="bnum">' + b.num + '</span>' : b.ic; }
 function checkBadges(){
   const got = BADGES.filter(b => !S.badges[b.id] && b.ok(S));
-  got.forEach(b => { S.badges[b.id] = now(); S.points += 20; S.lifetime += 20; });
+  got.forEach(b => { S.badges[b.id] = now(); S.points += 20; S.lifetime += 20; const d = S.daily[dayKey()] || (S.daily[dayKey()] = { n: 0, c: 0, p: 0 }); d.p += 20; });
   if (got.length) save(true);
   return got;
 }
@@ -1708,7 +1720,21 @@ function renderLogin(){
   }).join("") + '<button class="pcard add" id="addPlayer"><div class="av">➕</div><div class="nm">Add player</div><div class="sub">Grown-up PIN needed</div></button>';
   $("#loginHint").textContent = ids.length ? "Tap your name to play." : "Tap Add player to get started.";
 }
+// One-off repair: early versions added badge bonuses and point adjustments to the all-time total
+// but not to the day's points, so "This week" read too low. Only for players whose whole history
+// is from this week (so the two totals should match), and only on that player's own device.
+function repairWeek(p){
+  if (!p || p._wkfix) return false;
+  p._wkfix = 1;
+  const mon = mondayKey(0), keys = Object.keys(p.daily);
+  if (keys.some(k => k < mon)) { save(true); return false; }
+  const diff = p.lifetime - pointsBetween(p, mon);
+  if (diff > 0){ const d = p.daily[dayKey()] || (p.daily[dayKey()] = { n: 0, c: 0, p: 0 }); d.p += diff; }
+  save(true);
+  return diff > 0;
+}
 function renderHome(){
+  repairWeek(S);
   $("#hello").textContent = "Hi " + S.name + "!";
   $("#meAv").textContent = S.avatar;
   const rew = S.settings.rewardsOn, g = S.settings.goal;
