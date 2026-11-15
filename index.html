@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Times Tables">
-<meta name="app-version" content="2026.11.15a">
+<meta name="app-version" content="2026.11.15b">
 <title>Times Tables Quest</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800;900&display=swap" rel="stylesheet">
@@ -275,12 +275,12 @@ input.txt{height:52px;border-radius:14px;border:1px solid var(--line);background
       <div class="spacer"></div>
       <div style="text-align:right">
         <div class="muted small">REWARD</div>
-        <div class="display" style="font-size:28px"><span class="coin">V</span> <span id="rewardAmt">1000</span> V-Bucks</div>
+        <div class="display" style="font-size:28px" id="rewardShow"><span class="coin">V</span> 1,000 V-Bucks</div>
       </div>
     </div>
     <div class="bar"><i id="goalBar"></i></div>
     <div class="row small muted" style="margin-top:8px"><span id="toGo"></span><div class="spacer"></div><span id="lifetime"></span></div>
-    <div class="reached" id="reached" style="display:none">🏆 GOAL REACHED! Show a grown-up so they can unlock your V-Bucks.</div>
+    <div class="reached" id="reached" style="display:none">🏆 GOAL REACHED! Show a grown-up so they can unlock your reward.</div>
   </div>
   <div class="card goal" id="ptsCard" style="display:none">
     <div class="muted small">ALL-TIME POINTS</div>
@@ -321,7 +321,7 @@ input.txt{height:52px;border-radius:14px;border:1px solid var(--line);background
     <span class="pill" id="qCount">1 / 10</span>
     <div class="spacer"></div>
     <span class="pill">🔥 <span id="qStreak">0</span></span>
-    <span class="pill"><span class="coin" style="width:24px;height:24px;font-size:13px">V</span> +<span id="qPts">0</span></span>
+    <span class="pill">⭐ +<span id="qPts">0</span></span>
   </div>
   <div class="timer" id="timer"><i id="timerFill"></i></div>
   <div class="qwrap">
@@ -448,9 +448,17 @@ input.txt{height:52px;border-radius:14px;border:1px solid var(--line);background
       <div class="field"><label>Name<small>Shown on the leaderboard</small></label><input class="txt" id="sName" maxlength="16" placeholder="Name"></div>
       <div class="field"><label>Avatar</label><button class="btn sm ghost" id="avBtn">Change</button></div>
       <div class="field"><label>Player PIN<small>Optional. Stops others playing as them</small></label><div class="row"><button class="btn sm ghost" id="ppinBtn">Set PIN</button><button class="btn sm ghost" id="ppinOff">Remove</button></div></div>
-      <div class="field"><label>V-Bucks rewards<small>Turn off for grown-ups</small></label><button class="btn sm ghost" id="rewOnBtn"></button></div>
+      <div class="field"><label>Rewards<small>Turn off for grown-ups</small></label><button class="btn sm ghost" id="rewOnBtn"></button></div>
       <div class="field rew"><label>Points goal<small>Points needed to earn the reward</small></label><div class="stepper" data-k="goal" data-step="100" data-min="100" data-max="20000"><button>−</button><output></output><button>+</button></div></div>
-      <div class="field rew"><label>Reward (V-Bucks)<small>What you'll give when the goal is hit</small></label><div class="stepper" data-k="reward" data-step="100" data-min="100" data-max="13500"><button>−</button><output></output><button>+</button></div></div>
+      <div class="field rew" style="flex-wrap:wrap"><label>Reward<small>What you'll give when the goal is hit</small></label><input class="txt" id="rewText" maxlength="40" placeholder="e.g. 1,000 V-Bucks">
+        <div class="row" style="flex-wrap:wrap;gap:8px;width:100%;margin-top:10px" id="rewPresets">
+          <button class="pchip" data-rew="1,000 V-Bucks">🎮 1,000 V-Bucks</button>
+          <button class="pchip" data-rew="800 Robux">🧱 800 Robux</button>
+          <button class="pchip" data-rew="£5 pocket money">💷 £5 pocket money</button>
+          <button class="pchip" data-rew="1 hour extra screen time">📱 1 hour screen time</button>
+          <button class="pchip" data-rew="A trip to choose">🎟️ A trip out</button>
+          <button class="pchip" data-rew="A treat of your choice">🍦 A treat</button>
+        </div></div>
       <div class="field"><label>Speed Run time per question<small>Seconds (multiple choice gets 2s less)</small></label><div class="stepper" data-k="qTime" data-step="1" data-min="3" data-max="20"><button>−</button><output></output><button>+</button></div></div>
       <div class="field"><label>Blitz length<small>Seconds</small></label><div class="stepper" data-k="blitzTime" data-step="15" data-min="30" data-max="180"><button>−</button><output></output><button>+</button></div></div>
       <div class="field"><label>Include ×1 questions<small>Easy ones, turn off once they're past them</small></label><button class="btn sm ghost" id="onesBtn"></button></div>
@@ -935,6 +943,8 @@ function distractors(a, b){
 }
 
 /* ---------- quiz engine ---------- */
+function rewardLabel(p){ const t = String((p.settings && p.settings.rewardText) || "").trim(); return t || ((p.settings.reward || 1000).toLocaleString() + " V-Bucks"); }
+function rewardIcon(p){ return /v-?bucks/i.test(rewardLabel(p)) ? '<span class="coin">V</span>' : "🎁"; }
 const APP_VERSION = (document.querySelector("meta[name=app-version]") || {}).content || "dev";
 let Q = null, rafId = 0;
 /* ---------- tips ---------- */
@@ -1182,7 +1192,7 @@ function endQuiz(){
     if (acc >= .9 && n >= 5){ confetti(120); sfx.win(); }
     if (rew && S.points >= g && !S._celebrated){
       S._celebrated = true; save(true);
-      setTimeout(() => { confetti(260); sfx.win(); message("🏆", "GOAL REACHED!", "You hit " + g + " points! Show a grown-up so they can unlock your " + S.settings.reward + " V-Bucks.", [["Awesome!", "y"]]); }, 900);
+      setTimeout(() => { confetti(260); sfx.win(); message("🏆", "GOAL REACHED!", "You hit " + g + " points! Show a grown-up so they can unlock your reward: " + rewardLabel(S) + ".", [["Awesome!", "y"]]); }, 900);
     }
   };
   if (ms.length) startFix(ms, reveal); else reveal();
@@ -1340,7 +1350,7 @@ function renderHome(){
   if (rew){
     $("#ptsNow").textContent = S.points;
     $("#ptsGoal").textContent = g;
-    $("#rewardAmt").textContent = S.settings.reward.toLocaleString();
+    $("#rewardShow").innerHTML = rewardIcon(S) + " " + esc(rewardLabel(S));
     requestAnimationFrame(() => $("#goalBar").style.width = Math.min(100, S.points / g * 100) + "%");
     $("#toGo").textContent = S.points >= g ? "Goal smashed!" : (g - S.points) + " points to go";
     $("#lifetime").textContent = "All-time: " + S.lifetime.toLocaleString() + " pts";
@@ -1382,7 +1392,7 @@ function renderProgress(){
   $("#tbars").innerHTML = tbh;
   const names = { practice: "🎯 Practice", speed: "⏱️ Speed Run", blitz: "⚡ Blitz", tricky: "🧠 Tricky Ones" };
   $("#sessions").innerHTML = S.sessions.slice(0, 12).map(s => '<div class="it"><span>' + names[s.mode] + ' <span class="muted small">' + (s.style === "mc" ? "choice" : "typed") + '</span></span><span>' + s.c + '/' + s.n + ' · +' + s.p + ' <span class="muted small">' + new Date(s.d).toLocaleDateString(undefined, { day: "numeric", month: "short" }) + '</span></span></div>').join("") || '<div class="muted">No games yet.</div>';
-  $("#rewards").innerHTML = S.rewards.slice().reverse().map(r => '<div class="it"><span>🏆 ' + r.reward.toLocaleString() + ' V-Bucks</span><span class="muted">' + new Date(r.d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) + '</span></div>').join("") || '<div class="muted">' + (S.settings.rewardsOn ? "None yet — keep going!" : "Rewards are off for this player.") + '</div>';
+  $("#rewards").innerHTML = S.rewards.slice().reverse().map(r => '<div class="it"><span>🏆 ' + esc(r.label || (r.reward.toLocaleString() + " V-Bucks")) + '</span><span class="muted">' + new Date(r.d).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) + '</span></div>').join("") || '<div class="muted">' + (S.settings.rewardsOn ? "None yet — keep going!" : "Rewards are off for this player.") + '</div>';
 }
 let PP = null; // player being edited in Parent Zone
 let parentReturn = "home";
@@ -1397,12 +1407,14 @@ function renderParent(){
   $("#payCard").style.display = rew ? "" : "none";
   $("#pPts").textContent = p.points; $("#pGoal").textContent = g;
   $("#payBtn").disabled = p.points < g; $("#payBtn").style.opacity = p.points < g ? .4 : 1;
-  $("#payHint").textContent = p.points >= g ? "Goal reached. Once you've given the " + p.settings.reward + " V-Bucks, tap the button. " + g + " points come off and anything extra carries over." : (g - p.points) + " points still to go before " + esc(p.name) + "'s reward unlocks.";
+  $("#payHint").textContent = p.points >= g ? "Goal reached. Once you've given " + esc(rewardLabel(p)) + ", tap the button. " + g + " points come off and anything extra carries over." : (g - p.points) + " points still to go before " + esc(p.name) + "'s reward unlocks.";
   $("#pSetTitle").textContent = r.avatar + " " + p.name + "'s settings";
   $("#sName").value = p.name;
   $("#ppinBtn").textContent = r.pin ? "Change PIN" : "Set PIN";
   $("#ppinOff").style.display = r.pin ? "" : "none";
   $("#rewOnBtn").textContent = rew ? "On" : "Off";
+  $("#rewText").value = rewardLabel(p);
+  $$("#rewPresets [data-rew]").forEach(b => b.classList.toggle("on", b.dataset.rew === rewardLabel(p)));
   $$(".field.rew").forEach(f => f.style.display = rew ? "" : "none");
   $$(".stepper").forEach(st => st.querySelector("output").textContent = p.settings[st.dataset.k].toLocaleString());
   $("#onesBtn").textContent = p.settings.ones ? "On" : "Off";
@@ -1414,7 +1426,7 @@ function renderParent(){
     ["Overall accuracy", ac.a ? Math.round(ac.acc * 100) + "%" : "–"],
     ["Last 7 days", wn + " questions on " + week.length + " day" + (week.length === 1 ? "" : "s") + (wn ? " · " + Math.round(wc / wn * 100) + "%" : "")],
     ["Facts mastered", masteredCount(p) + " of 78"],
-    ["Rewards given", p.rewards.length + (p.rewards.length ? " (" + p.rewards.reduce((s, x) => s + x.reward, 0).toLocaleString() + " V-Bucks)" : "")]
+    ["Rewards given", String(p.rewards.length)]
   ];
   $("#pSummary").innerHTML = rows.map(x => '<div class="it"><span>' + x[0] + '</span><b>' + x[1] + '</b></div>').join("") +
     '<div style="margin-top:10px">' + insights(p).map(i => '<div class="insight"><span class="ic">' + i.ic + '</span><span>' + i.t + '</span></div>').join("") + "</div>";
@@ -1580,6 +1592,9 @@ $("#ppinBtn").onclick = () => {
   });
 };
 $("#ppinOff").onclick = () => { const r = F.roster[PP]; r.pin = ""; r.u = now(); saveFamily(); renderParent(); };
+function setReward(txt){ const p = PL[PP]; if (!p) return; p.settings.rewardText = String(txt).trim().slice(0, 40); savePlayer(p); renderParent(); }
+$("#rewText").addEventListener("change", e => setReward(e.target.value));
+$("#rewPresets").addEventListener("click", e => { const b = e.target.closest("[data-rew]"); if (b){ sfx.tap(); setReward(b.dataset.rew); } });
 $("#rewOnBtn").onclick = () => { const p = PL[PP]; p.settings.rewardsOn = !p.settings.rewardsOn; savePlayer(p); renderParent(); };
 $("#onesBtn").onclick = () => { const p = PL[PP]; p.settings.ones = !p.settings.ones; savePlayer(p); renderParent(); };
 $("#pinBtn").onclick = () => askPin("New parent PIN", "Choose 4 digits", v => {
@@ -1591,8 +1606,8 @@ $("#pinBtn").onclick = () => askPin("New parent PIN", "Choose 4 digits", v => {
 });
 $("#payBtn").onclick = () => {
   const p = PL[PP], g = p.settings.goal; if (p.points < g) return;
-  message("🎁", "Reward given?", "This records " + p.settings.reward + " V-Bucks as given to " + p.name + " and takes " + g + " points off.", [["Cancel", "ghost"], ["Yes, given", "g", () => {
-    p.points -= g; p.rewards.push({ d: now(), goal: g, reward: p.settings.reward }); p._celebrated = p.points >= g;
+  message("🎁", "Reward given?", "This records " + rewardLabel(p) + " as given to " + p.name + " and takes " + g + " points off.", [["Cancel", "ghost"], ["Yes, given", "g", () => {
+    p.points -= g; p.rewards.push({ d: now(), goal: g, reward: p.settings.reward, label: rewardLabel(p) }); p._celebrated = p.points >= g;
     savePlayer(p); renderParent(); confetti(200); sfx.win();
   }]]);
 };
